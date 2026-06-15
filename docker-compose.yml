@@ -1,0 +1,110 @@
+# WorkFlow Assistant — Docker per gradi
+#
+# Passo 3 (solo API):     docker compose up --build
+# Stack completo (passo 7+): docker compose --profile full up --build
+
+services:
+  api:
+    build:
+      context: ./backend
+      target: development
+    container_name: workflow-api
+    ports:
+      - "${API_PORT:-8000}:8000"
+    env_file:
+      - .env
+    volumes:
+      - ./backend/app:/app/app
+      - ./data:/app/data
+    restart: unless-stopped
+    networks:
+      - workflow-net
+
+  # ── Servizi aggiuntivi: attivi solo con --profile full ───
+  worker:
+    profiles: [full]
+    build:
+      context: ./backend
+      target: development
+    container_name: workflow-worker
+    command: python -m app.worker
+    env_file:
+      - .env
+    volumes:
+      - ./backend/app:/app/app
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - workflow-net
+
+  scheduler:
+    profiles: [full]
+    build:
+      context: ./backend
+      target: development
+    container_name: workflow-scheduler
+    command: python -m app.scheduler
+    env_file:
+      - .env
+    volumes:
+      - ./backend/app:/app/app
+      - ./data:/app/data
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - workflow-net
+
+  postgres:
+    profiles: [full]
+    image: postgres:16-alpine
+    container_name: workflow-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-workflow}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-workflow_dev}
+      POSTGRES_DB: ${POSTGRES_DB:-workflow_assistant}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-workflow}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - workflow-net
+
+  redis:
+    profiles: [full]
+    image: redis:7-alpine
+    container_name: workflow-redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - workflow-net
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  workflow-net:
+    driver: bridge
