@@ -4,7 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.agent.orchestrator import orchestrator
-from app.api.routes import chat, health, sanitize
+from app.api.routes import chat, health, sanitize, tasks
 from app.core.config import settings
 
 app = FastAPI(
@@ -24,6 +24,7 @@ app.add_middleware(
 app.include_router(health.router, tags=["health"])
 app.include_router(chat.router, prefix="/api/v1", tags=["chat"])
 app.include_router(sanitize.router, prefix="/api/v1", tags=["sanitization"])
+app.include_router(tasks.router, prefix="/api/v1", tags=["tasks"])
 
 
 @app.get("/")
